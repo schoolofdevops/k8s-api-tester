@@ -1,10 +1,11 @@
 import argparse
+import time
 from kubernetes import client, config
-import sys
 
 def main():
-    parser = argparse.ArgumentParser(description="Kubernetes API Tester App")
-    parser.add_argument("--namespace", required=True, help="Namespace to interact with")
+    parser = argparse.ArgumentParser(description="Kubernetes API Permission Tester")
+    parser.add_argument("--namespace", default="default", help="Namespace to check permissions within")
+    parser.add_argument("--interval", type=int, default=30, help="Time interval for permission checks loop in seconds")
     args = parser.parse_args()
 
     # Load in-cluster configuration
@@ -12,71 +13,52 @@ def main():
     v1 = client.CoreV1Api()
     apps_v1 = client.AppsV1Api()
 
-    # Read Pods, Deployments, Services in a specific namespace
+    while True:
+        print("Starting the permission check loop...")
+        check_permissions(v1, apps_v1, args.namespace)
+        print(f"Sleeping for {args.interval} seconds...\n")
+        time.sleep(args.interval)
+
+def check_permissions(v1, apps_v1, namespace):
+    # Check permissions for Pods, Deployments, Services
+    check_resource_permissions(v1, apps_v1, namespace)
+    # Check permissions for PVCs, PVs, and Events cluster-wide
+    check_cluster_permissions(v1)
+
+def check_resource_permissions(v1, apps_v1, namespace):
+    resources = [
+        ("pods", v1.list_namespaced_pod),
+        ("deployments", apps_v1.list_namespaced_deployment),
+        ("services", v1.list_namespaced_service)
+    ]
+    for resource_name, list_func in resources:
+        try:
+            list_func(namespace=namespace)
+            print(f"Success: Read permission for {resource_name} in namespace {namespace} is granted.")
+        except Exception as e:
+            print(f"Failure: Read permission for {resource_name} in namespace {namespace} is denied. Error: {e}")
+
+def check_cluster_permissions(v1):
+    # Persistent Volume Claims
     try:
-        print(f"Reading pods in namespace {args.namespace}:")
-        pods = v1.list_namespaced_pod(namespace=args.namespace)
-        for pod in pods.items:
-            print(f"- Pod: {pod.metadata.name}")
-
-        print(f"Reading deployments in namespace {args.namespace}:")
-        deployments = apps_v1.list_namespaced_deployment(namespace=args.namespace)
-        for dep in deployments.items:
-            print(f"- Deployment: {dep.metadata.name}")
-
-        print(f"Reading services in namespace {args.namespace}:")
-        services = v1.list_namespaced_service(namespace=args.namespace)
-        for service in services.items:
-            print(f"- Service: {service.metadata.name}")
+        v1.list_persistent_volume_claim_for_all_namespaces()
+        print("Success: Read permission for PVCs cluster-wide is granted.")
     except Exception as e:
-        print(f"Error reading resources in namespace {args.namespace}: {e}")
+        print(f"Failure: Read permission for PVCs cluster-wide is denied. Error: {e}")
 
-    # PVCs and PVs operations
+    # Persistent Volumes
     try:
-        print("Reading and updating PVCs cluster-wide:")
-        pvcs = v1.list_persistent_volume_claim_for_all_namespaces()
-        for pvc in pvcs.items:
-            print(f"- PVC: {pvc.metadata.name}")
-
-        print("Creating, updating, and deleting PVs cluster-wide:")
-        # Example create PV
-        pv_body = client.V1PersistentVolume(
-            metadata=client.V1ObjectMeta(name='api-tester-pv'),
-            spec=client.V1PersistentVolumeSpec(
-                capacity={'storage': '1Gi'},
-                access_modes=['ReadWriteOnce'],
-                persistent_volume_reclaim_policy='Retain',
-                storage_class_name='manual',
-                host_path=client.V1HostPathVolumeSource(path='/mnt/data')
-            )
-        )
-        pv = v1.create_persistent_volume(body=pv_body)
-        print(f"Created PV: {pv.metadata.name}")
-
-        # Update the created PV
-        pv.spec.capacity = {'storage': '2Gi'}
-        updated_pv = v1.patch_persistent_volume(name=pv.metadata.name, body=pv)
-        print(f"Updated PV: {updated_pv.metadata.name}")
-
-        # Delete the PV
-        v1.delete_persistent_volume(name=pv.metadata.name)
-        print(f"Deleted PV: {pv.metadata.name}")
-
+        v1.list_persistent_volume_for_all_namespaces()
+        print("Success: Read permission for PVs cluster-wide is granted.")
     except Exception as e:
-        print(f"Error managing PVCs/PVs: {e}")
+        print(f"Failure: Read permission for PVs cluster-wide is denied. Error: {e}")
 
-    # Reading and updating Events
+    # Events
     try:
-        print("Reading and updating events cluster-wide:")
-        events = v1.list_event_for_all_namespaces()
-        for event in events.items:
-            print(f"- Event: {event.metadata.name} in {event.involved_object.namespace}")
-            if event.reason == "ExampleReason":
-                event.message = "Updated by API Tester"
-                v1.patch_namespaced_event(name=event.metadata.name, namespace=event.involved_object.namespace, body=event)
-                print(f"Updated event {event.metadata.name}")
+        v1.list_event_for_all_namespaces()
+        print("Success: Read permission for events cluster-wide is granted.")
     except Exception as e:
-        print(f"Error reading/updating events: {e}")
+        print(f"Failure: Read permission for events cluster-wide is denied. Error: {e}")
 
 if __name__ == '__main__':
     main()

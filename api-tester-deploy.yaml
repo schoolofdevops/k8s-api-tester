@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-tester
+  labels:
+    app: api-tester
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-tester
+  template:
+    metadata:
+      labels:
+        app: api-tester
+    spec:
+      containers:
+      - name: api-tester
+        image: docker.io/schoolofdevops/api-tester:latest
+        env:
+        - name: NAMESPACE
+          value: "default"  # Default namespace, can be overridden
+        - name: INTERVAL
+          value: "30"  # Default interval in seconds, can be overridden
+        args: ["--namespace", "$(NAMESPACE)", "--interval", "$(INTERVAL)"]
+      restartPolicy: Always

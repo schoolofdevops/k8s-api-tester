@@ -1,0 +1,11 @@
+services:
+  api-tester:
+    build:
+      context: .
+      dockerfile: Dockerfile  
+    image: schoolofdevops/api-tester:latest
+    environment:
+      KUBECONFIG: /root/.kube/config
+    volumes:
+      - $HOME/.kube/:/root/.kube/:ro
+    command: ["--namespace", "default"]
