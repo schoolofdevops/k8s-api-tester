@@ -4,6 +4,7 @@ metadata:
   name: api-tester
   labels:
     app: api-tester
+  namespace: default
 spec:
   replicas: 1
   selector:
